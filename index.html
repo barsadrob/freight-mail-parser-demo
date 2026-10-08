@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Freight Mail Parser – demo</title>
+<meta name="description" content="Demo: analiza maili z zapytaniami transportowymi (trasa, daty, waga, palety, ADR, ładunek) w całości w przeglądarce.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%9A%9A%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f4f6f9; --panel: #ffffff; --text: #1d2433; --muted: #6b7385;
+    --border: #dde2ea; --accent: #1f5fd1; --accent-hover: #184ba6;
+    --ok-bg: #e7f6ec; --ok: #1d7a3c; --warn-bg: #fff4e0; --warn: #9a5b00;
+    --bad-bg: #fde9e9; --bad: #b42323; --field-bg: #f8f9fb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { padding: 18px 24px 4px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 2px 0 0; color: var(--muted); }
+  main {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    padding: 16px 24px 24px; max-width: 1400px; margin: 0 auto;
+  }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px; display: flex; flex-direction: column; min-width: 0;
+  }
+  .panel h2 { margin: 0 0 12px; font-size: 16px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row.space { justify-content: space-between; margin-bottom: 10px; }
+  textarea {
+    width: 100%; min-height: 460px; flex: 1; resize: vertical; padding: 12px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--field-bg);
+    font: 14px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--text);
+  }
+  textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  select, button {
+    font: inherit; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  }
+  button.primary {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+    font-weight: 600; padding: 10px 28px; font-size: 16px;
+  }
+  button.primary:hover { background: var(--accent-hover); }
+  button:disabled { opacity: .6; cursor: wait; }
+  .actions { margin-top: 12px; }
+  .demo-tag {
+    font-size: 12px; font-weight: 600; vertical-align: middle; padding: 2px 8px;
+    border-radius: 99px; background: var(--warn-bg); color: var(--warn);
+  }
+  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 0 24px 24px; }
+  .hint { color: var(--muted); font-size: 13px; }
+  .placeholder { color: var(--muted); text-align: center; margin: auto; padding: 40px 10px; }
+  .status {
+    padding: 10px 14px; border-radius: 8px; font-weight: 600; margin-bottom: 14px;
+  }
+  .status.ok { background: var(--ok-bg); color: var(--ok); }
+  .status.warn { background: var(--warn-bg); color: var(--warn); }
+  .status.bad { background: var(--bad-bg); color: var(--bad); }
+  dl { display: grid; grid-template-columns: 150px 1fr; margin: 0; }
+  dt, dd { padding: 8px 0; border-bottom: 1px solid var(--border); margin: 0; }
+  dt { color: var(--muted); }
+  dd { font-weight: 600; overflow-wrap: anywhere; }
+  dd.empty { color: var(--muted); font-weight: 400; font-style: italic; }
+  dd.empty.missing { color: var(--bad); }
+  .sub { display: block; color: var(--muted); font-weight: 400; font-size: 13px; }
+  .badge { display: inline-block; padding: 1px 10px; border-radius: 99px; font-size: 13px; }
+  .badge.yes { background: var(--bad-bg); color: var(--bad); }
+  .badge.no { background: var(--ok-bg); color: var(--ok); }
+  h3 { font-size: 15px; margin: 20px 0 8px; }
+  ul.missing { margin: 0; padding-left: 20px; color: var(--warn); }
+  pre.reply {
+    white-space: pre-wrap; background: var(--field-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; margin: 0; font: inherit;
+  }
+  details { margin-top: 18px; }
+  details pre {
+    background: var(--field-bg); padding: 10px; border-radius: 8px; overflow: auto;
+    font-size: 12px; max-height: 300px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Freight Mail Parser <span class="demo-tag">demo</span></h1>
+  <p>Wklej mail z zapytaniem transportowym i kliknij „Analizuj”. Analiza odbywa się w Twojej przeglądarce – treść maila nigdzie nie jest wysyłana.</p>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="row space">
+      <h2 style="margin:0">Treść maila</h2>
+      <div class="row">
+        <select id="examples" aria-label="Wczytaj przykład">
+          <option value="">Wczytaj przykład…</option>
+        </select>
+        <button id="clear" type="button">Wyczyść</button>
+      </div>
+    </div>
+    <textarea id="mail" placeholder="Np.:&#10;Załadunek: 14.10.2026, PL 62-080 Tarnowo Podgórne&#10;Rozładunek: 16.10.2026, DE 80331 München&#10;Towar: napoje, 33 europalety, 24 000 kg, bez ADR"></textarea>
+    <div class="row actions">
+      <button id="analyze" class="primary" type="button">Analizuj</button>
+      <span class="hint">lub Ctrl+Enter</span>
+    </div>
+  </section>
+
+  <section class="panel" id="result" aria-live="polite">
+    <h2>Wynik analizy</h2>
+    <p class="placeholder">Tu pojawi się wynik.</p>
+  </section>
+</main>
+
+<footer>
+  Wersja demonstracyjna. Rozpoznawanie działa na prostych regułach i może się mylić – zawsze sprawdź wynik.
+  Nie wklejaj danych, których nie chcesz pokazywać na ekranie; nic nie jest zapisywane ani wysyłane.
+</footer>
+
+<script src="parser.js"></script>
+<script src="examples.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const mail = $("mail"), btn = $("analyze"), out = $("result"), select = $("examples");
+let examples = {};
+let currentMissing = [];
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  for (const c of children) if (c != null) node.append(c);
+  return node;
+}
+
+function formatDate(iso) {
+  if (!iso) return null;
+  const [y, m, d] = iso.split("-");
+  const days = ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"];
+  return `${d}.${m}.${y} (${days[new Date(iso + "T12:00:00").getDay()]})`;
+}
+
+// missingName: nazwa pola na liście braków; tylko wtedy "brak" jest czerwony.
+function row(label, value, sub, missingName) {
+  const isMissing = currentMissing.includes(missingName);
+  const dd = value == null || value === ""
+    ? el("dd", { class: "empty" + (isMissing ? " missing" : "") }, isMissing ? "brak" : "nie podano")
+    : el("dd", {}, value, sub ? el("span", { class: "sub" }, sub) : null);
+  return [el("dt", {}, label), dd];
+}
+
+function render(r) {
+  out.replaceChildren(el("h2", {}, "Wynik analizy"));
+  currentMissing = r.missing;
+
+  const n = r.missing.length;
+  out.append(el("div", { class: "status " + (n ? "warn" : "ok") },
+    n ? `Brakuje informacji: ${n}` : "✔ Wszystkie podstawowe informacje są kompletne"));
+
+  let adr = null;
+  if (r.adr === true) adr = el("span", { class: "badge yes" }, "TAK" + (r.adr_details.length ? " – " + r.adr_details.join(", ") : ""));
+  if (r.adr === false) adr = el("span", { class: "badge no" }, "NIE");
+
+  const pallets = r.pallets ? `${r.pallets} szt.` : null;
+  const weight = r.weight_kg != null ? `${r.weight_kg.toLocaleString("pl-PL")} kg` : null;
+  const cargo = r.cargo || r.cargo_category;
+  const cargoSub = r.cargo && r.cargo_category ? "kategoria: " + r.cargo_category : null;
+
+  out.append(el("dl", {},
+    ...row("Załadunek", r.origin_short, r.origin && r.origin.raw !== r.origin_short ? r.origin.raw : null, "miejsce załadunku"),
+    ...row("Rozładunek", r.destination_short, r.destination && r.destination.raw !== r.destination_short ? r.destination.raw : null, "miejsce rozładunku"),
+    ...row("Data załadunku", formatDate(r.loading_date), null, "data załadunku"),
+    ...row("Data rozładunku", formatDate(r.unloading_date), null, "data rozładunku"),
+    ...row("Waga", weight, null, "waga"),
+    ...row("Palety", pallets, r.pallet_type, "liczba palet / LDM"),
+    ...row("LDM", r.ldm != null ? String(r.ldm) : null, null, "liczba palet / LDM"),
+    ...row("ADR", adr, null, "informacja o ADR"),
+    ...row("Ładunek", cargo, cargoSub, "rodzaj ładunku"),
+  ));
+
+  if (n) {
+    out.append(el("h3", {}, "Brakujące informacje"),
+      el("ul", { class: "missing" }, ...r.missing.map((m) => el("li", {}, m))));
+    const copy = el("button", { type: "button" }, "Kopiuj odpowiedź");
+    copy.onclick = async () => {
+      try { await navigator.clipboard.writeText(r.reply); copy.textContent = "Skopiowano ✔"; }
+      catch { copy.textContent = "Zaznacz tekst i skopiuj ręcznie"; }
+      setTimeout(() => (copy.textContent = "Kopiuj odpowiedź"), 2000);
+    };
+    out.append(el("div", { class: "row space" }, el("h3", {}, "Proponowana odpowiedź do klienta"), copy),
+      el("pre", { class: "reply" }, r.reply));
+  }
+
+  out.append(el("details", {}, el("summary", {}, "Dane techniczne (JSON)"),
+    el("pre", {}, JSON.stringify(r, null, 2))));
+}
+
+function showError(msg) {
+  out.replaceChildren(el("h2", {}, "Wynik analizy"), el("div", { class: "status bad" }, msg));
+}
+
+function analyze() {
+  if (!mail.value.trim()) { showError("Wklej najpierw treść maila."); mail.focus(); return; }
+  try {
+    const r = FreightParser.parseEmail(mail.value);
+    r.origin_short = r.origin ? FreightParser.shortLocation(r.origin) : null;
+    r.destination_short = r.destination ? FreightParser.shortLocation(r.destination) : null;
+    r.reply = r.missing.length ? FreightParser.draftReply(r) : null;
+    render(r);
+  } catch (e) {
+    showError("Nie udało się przeanalizować maila: " + e.message);
+  }
+}
+
+btn.onclick = analyze;
+mail.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze(); });
+$("clear").onclick = () => { mail.value = ""; select.value = ""; mail.focus(); };
+select.onchange = () => { if (select.value) { mail.value = examples[select.value]; analyze(); } };
+
+examples = window.FREIGHT_EXAMPLES || {};
+for (const name of Object.keys(examples)) select.append(el("option", { value: name }, name));
+</script>
+</body>
+</html>
