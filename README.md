@@ -14,25 +14,36 @@ Rozumie maile po polsku, angielsku i niemiecku.
 
 ## Jak to działa
 
-To jest statyczna strona (HTML, CSS, JavaScript). **Wszystko dzieje się
-w przeglądarce**: nie ma serwera, bazy danych, kluczy API ani płatnych usług.
-Treść wklejonego maila nie jest nigdzie wysyłana ani zapisywana.
+```
+Ta strona (GitHub Pages)  ──►  Cloudflare Worker  ──►  Claude AI
+```
 
-Rozpoznawanie działa na regułach (wyrażeniach regularnych), więc może się
-mylić przy nietypowych mailach. Zawsze sprawdź wynik.
+Strona wysyła treść maila do Cloudflare Workera, a Worker przekazuje ją do
+modelu Claude AI. **Klucz API jest przechowywany wyłącznie w Workerze jako
+sekret Cloudflare.** Na tej stronie i w tym repozytorium nie ma żadnych kluczy
+ani kodu serwera.
+
+Treść maila nie jest zapisywana. Obowiązuje limit 10 analiz na godzinę z jednego
+adresu IP. Gdy Worker jest niedostępny, można użyć prostego parsera regułowego,
+który działa w całości w przeglądarce.
+
+Wynik może zawierać błędy, dlatego zawsze go sprawdź. Każde pole ma status
+(wprost / wywnioskowane / niejasne / brak) i cytat z maila, na którym się opiera.
 
 ## Pliki
 
 | Plik | Do czego służy |
 |---|---|
 | `index.html` | strona: pole na maila, przycisk „Analizuj”, wynik |
-| `parser.js` | logika rozpoznawania |
-| `examples.js` | fikcyjne przykładowe maile |
+| `app.js` | wysyłanie maila do Workera i wyświetlanie wyniku AI |
+| `parser.js` | zapasowy parser regułowy (bez AI) |
+| `examples.js` | zmyślone przykładowe maile |
 | `.nojekyll` | mówi GitHub Pages, żeby podał pliki bez przetwarzania |
+
+Adres Workera i publiczny klucz witryny Turnstile ustawia się na początku `app.js`.
 
 ## Uruchomienie
 
-- **Lokalnie:** pobierz repozytorium i kliknij dwukrotnie `index.html`.
-- **GitHub Pages:** Settings → Pages → Source: *Deploy from a branch* →
-  Branch: `main`, folder: `/ (root)` → Save. Strona będzie pod adresem
-  `https://barsadrob.github.io/freight-mail-parser-demo/`.
+GitHub Pages: Settings → Pages → Source: *Deploy from a branch* → Branch: `main`,
+folder: `/ (root)` → Save. Strona będzie pod adresem
+`https://barsadrob.github.io/freight-mail-parser-demo/`.
