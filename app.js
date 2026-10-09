@@ -46,7 +46,8 @@
         return range ? [range, hours].filter(Boolean).join(", ") : "przedział (nieokreślony)";
       }
       case "deadline": return date ? `najpóźniej ${date}${t.time_to ? ` do ${t.time_to}` : ""}` : "najpóźniej do… (termin nieprecyzyjny)";
-      case "earliest": return date ? `nie wcześniej niż ${date}${t.time_from ? ` od ${t.time_from}` : ""}` : "nie wcześniej niż… (termin nieprecyzyjny)";
+      case "not_before": return date ? `nie wcześniej niż ${date}${t.time_from ? ` od ${t.time_from}` : ""}` : "nie wcześniej niż… (termin nieprecyzyjny)";
+      case "unspecified": return null;
       default: return date;
     }
   }
@@ -68,23 +69,25 @@
   }
 
   function fmtWeight(w) {
-    if (!w) return null;
+    if (!w || !w.kg) return null;
     return `${w.qualifier === "approx" ? "ok. " : w.qualifier === "max" ? "maks. " : ""}${fmtNum(w.kg)} kg`;
   }
 
   function fmtDimensions(d) {
     if (!d || !d.items.length) return null;
     return d.items.map((i) => {
-      const size = [i.length_cm, i.width_cm, i.height_cm].map((v) => (v == null ? "?" : fmtNum(v))).join(" × ");
+      const size = [i.length_cm, i.width_cm, i.height_cm].map((v) => (v === "" ? "?" : fmtNum(v))).join(" × ");
       return `${i.count ? `${i.count} × ` : ""}${size} cm${i.description ? ` (${i.description})` : ""}`;
     }).join("; ");
   }
 
   function fmtVehicle(v) {
     if (!v) return null;
-    const temp = v.temperature_min_c != null || v.temperature_max_c != null
-      ? `${v.temperature_min_c ?? "?"}…${v.temperature_max_c ?? "?"} °C` : null;
-    return [v.type !== "dowolny" ? v.type : null, temp, ...v.requirements].filter(Boolean).join(", ") || "dowolny";
+    const temp = v.temperature_min_c !== "" || v.temperature_max_c !== ""
+      ? `${v.temperature_min_c || "?"}…${v.temperature_max_c || "?"} °C` : null;
+    const type = v.type !== "dowolny" && v.type !== "nieznany" ? v.type : null;
+    const text = [type, temp, ...v.requirements].filter(Boolean).join(", ");
+    return text || (v.type === "dowolny" ? "dowolny" : null);
   }
 
   const STATUS_LABEL = { explicit: "wprost", inferred: "wywnioskowane", ambiguous: "niejasne", missing: "brak" };
@@ -99,7 +102,7 @@
       el("span", { class: "value" + (empty ? " empty" : "") }, empty ? (status === "ambiguous" ? "niejasne" : "brak") : value),
       badge);
     if (field && field.source_quote) node.append(el("span", { class: "extra quote" }, `„${field.source_quote}”`));
-    if (field && field.note) node.append(el("span", { class: "extra" }, field.note));
+    if (field && field.note_pl) node.append(el("span", { class: "extra" }, field.note_pl));
     return node;
   }
 
@@ -138,7 +141,7 @@
     out.append(
       item("Ilość / objętość", fmtQuantity(c.quantity.value), c.quantity),
       item("Waga", fmtWeight(c.weight.value), c.weight),
-      item("Rodzaj towaru", c.cargo_type.value ? `${c.cargo_type.value.description} (${c.cargo_type.value.category})` : null, c.cargo_type),
+      item("Rodzaj towaru", c.cargo_type.value.description ? `${c.cargo_type.value.description} (${c.cargo_type.value.category})` : null, c.cargo_type),
     );
 
     const o = r.optional;
@@ -148,7 +151,7 @@
     out.append(
       el("h3", {}, "Opcjonalne"),
       item("Wymiary", fmtDimensions(o.dimensions.value), o.dimensions, true),
-      item("Piętrowanie", o.stackable.value == null ? null : o.stackable.value ? "można piętrować" : "nie piętrować", o.stackable, true),
+      item("Piętrowanie", { yes: "można piętrować", no: "nie piętrować" }[o.stackable.value] || null, o.stackable, true),
       item("ADR", adrText, adr, true),
       item("Pojazd", fmtVehicle(o.vehicle.value), o.vehicle, true),
     );
