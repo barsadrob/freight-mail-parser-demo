@@ -11,7 +11,7 @@
     WORKER_URL: "https://freight-mail-parser.barsadrob.workers.dev",
     // Publiczny klucz witryny Turnstile. Pusty = strona nie wysyła tokenu
     // (Worker musi mieć wtedy REQUIRE_TURNSTILE = false).
-    TURNSTILE_SITE_KEY: "",
+    TURNSTILE_SITE_KEY: "0x4AAAAAAFSdvttXCMhHmHFt",
   };
 
   const $ = (id) => document.getElementById(id);
